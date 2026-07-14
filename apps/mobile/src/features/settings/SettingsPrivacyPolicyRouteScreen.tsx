@@ -7,18 +7,38 @@ import { LoadingStrip } from "../../components/LoadingStrip";
 import { SymbolView } from "../../components/AppSymbol";
 import { useThemeColor } from "../../lib/useThemeColor";
 
-const PRIVACY_POLICY_URL = "https://t3.codes/privacy-policy";
+const DEFAULT_PRIVACY_POLICY_URL = "https://t3.codes/privacy-policy";
 
-function isPrivacyPolicyUrl(value: string): boolean {
+function resolvePrivacyPolicyUrl(override: string | undefined): string {
+  const candidate = override?.trim();
+  if (!candidate) return DEFAULT_PRIVACY_POLICY_URL;
+
+  try {
+    const url = new URL(candidate);
+    return url.protocol === "https:" || url.protocol === "http:"
+      ? url.toString()
+      : DEFAULT_PRIVACY_POLICY_URL;
+  } catch {
+    return DEFAULT_PRIVACY_POLICY_URL;
+  }
+}
+
+const PRIVACY_POLICY_URL = resolvePrivacyPolicyUrl(process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL);
+
+function webDocumentIdentity(value: string): string | null {
   try {
     const url = new URL(value);
-    return (
-      url.origin === "https://t3.codes" &&
-      (url.pathname === "/privacy-policy" || url.pathname === "/privacy-policy/")
-    );
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+
+    const pathname = url.pathname.replace(/\/+$/, "") || "/";
+    return `${url.origin}${pathname}`;
   } catch {
-    return false;
+    return null;
   }
+}
+
+function isPrivacyPolicyUrl(value: string, privacyPolicyUrl: string): boolean {
+  return webDocumentIdentity(value) === webDocumentIdentity(privacyPolicyUrl);
 }
 
 export function SettingsPrivacyPolicyRouteScreen() {
@@ -78,7 +98,7 @@ export function SettingsPrivacyPolicyRouteScreen() {
       <WebView
         key={reloadKey}
         source={{ uri: PRIVACY_POLICY_URL }}
-        originWhitelist={["https://*", "mailto:*"]}
+        originWhitelist={["http://*", "https://*", "mailto:*"]}
         cacheEnabled={false}
         cacheMode="LOAD_NO_CACHE"
         domStorageEnabled={false}
@@ -89,7 +109,7 @@ export function SettingsPrivacyPolicyRouteScreen() {
         thirdPartyCookiesEnabled={false}
         startInLoadingState
         onShouldStartLoadWithRequest={(request) => {
-          if (isPrivacyPolicyUrl(request.url)) return true;
+          if (isPrivacyPolicyUrl(request.url, PRIVACY_POLICY_URL)) return true;
           openExternalUrl(request.url);
           return false;
         }}
